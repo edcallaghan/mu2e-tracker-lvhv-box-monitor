@@ -107,73 +107,78 @@ def timeseries(supplies, channels, cmd, label, fig, ax, xlim, ylim, yscale, logg
             for k in channels
     }
 
+    poll_all_queries(supplies, cmd, channels, buffs, 0.1)
+
     ax.set_xlabel('Time ago [s]')
     ax.set_ylabel(label)
     lines = {}
     for channel in channels:
         label = 'Channel %d' % channel
         lines[channel], *rest = ax.plot([], [], '-', label=label)
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+    ax.set_yscale(yscale)
+    ax.invert_xaxis()
 
-    legend = None
+    global init_tups
+    tup = lines.values()
+    init_tups.append(tup)
 
-    def init():
-        nonlocal legend
-        ax.set_xlim(*xlim)
-        ax.set_ylim(*ylim)
-        ax.set_yscale(yscale)
-        #legend = ax.legend(ncols=3)
-        ax.invert_xaxis()
-        return list(lines.values())
+    return channels, lines, buffs
 
-    def update(frame, lines, buffs):
-        nonlocal legend
-        rn = now()
-        latest_values = {}
-        for k in lines.keys():
-            buff = buffs[k]
-            snapshot = buff.Snapshot()
-            xx = [(rn - pair[1]).total_seconds() for pair in snapshot]
-            yy = [pair[0] for pair in snapshot]
-            lines[k].set_data(xx, yy)
-            if 0 < len(yy):
-                latest_values[k] = yy[-1]
+init_tups = []
+def init():
+    global init_tups
+    rv = []
+    for tup in init_tups:
+        rv += tup
+    return rv
 
-        for k in channels:
-            if k in latest_values:
-                lines[k].set_label(f'{latest_values[k]:.3f}\nChannel {k}')
-            else:
-                lines[k].set_label(f'Channel {k}')
+def update_subplot(frame, channels, lines, buffs):
+    rn = now()
+    latest_values = {}
+    for k in lines.keys():
+        buff = buffs[k]
+        snapshot = buff.Snapshot()
+        xx = [(rn - pair[1]).total_seconds() for pair in snapshot]
+        yy = [pair[0] for pair in snapshot]
+        lines[k].set_data(xx, yy)
+        if 0 < len(yy):
+            latest_values[k] = yy[-1]
 
-        if legend is not None:
-            legend.remove()
-        #legend = ax.legend(ncols=3)
-        return lines.values()
+    for k in channels:
+        if k in latest_values:
+            lines[k].set_label(f'{latest_values[k]:.3f}\nChannel {k}')
+        else:
+            lines[k].set_label(f'Channel {k}')
 
-    poll_all_queries(supplies, cmd, channels, buffs, 0.1)
+    return lines.values()
 
-    animation = FuncAnimation(fig, partial(update, lines=lines, buffs=buffs),
-                              frames=forever,
-                              init_func=init,
-                              repeat=False,
-                              interval=1000,
-                              blit=True)
-    return animation
+def update(frame, channels, lines, buffs):
+    rv = []
+    for subchannels, sublines, subbuffs in zip(channels, lines, buffs):
+        updated = update_subplot(frame, subchannels, sublines, subbuffs)
+        rv += updated
+    return rv
 
 def main(args):
     fig = plt.figure()
     axs = fig.subplots(nrows=len(args.ports), ncols=3)
-    timeseriess = []
+    channels = []
+    lines = []
+    buffs = []
+
     for i,port in enumerate(args.ports):
         mksupply = lambda: PowerSupplyServerConnection(args.host, port,
                                                        header=args.header)
         mksupplies = lambda chs: [mksupply() for ch in chs]
-        channels = args.channels
+        this_channels = args.channels
 
         if 1 < len(args.ports):
             row = axs[i]
         else:
             row = axs
-        voltages = timeseries(mksupplies(channels), channels,
+        c, l, b = timeseries(mksupplies(this_channels), this_channels,
                               'get_vhv', 'Voltage [V]',
                               fig, row[0],
 #                             (0.0, 300.0), (0.0, 3000.0),
@@ -181,24 +186,37 @@ def main(args):
                               'linear',
                               lambda *args: None,
                              )
-        currents = timeseries(mksupplies(channels), channels,
+        channels.append(c)
+        lines.append(l)
+        buffs.append(b)
+        c, l, b = timeseries(mksupplies(this_channels), this_channels,
                               'get_ihv', 'Current [uA]',
                               fig, row[1],
                               (0.0, 300.0), (0.0, 200.0),
                               'linear',
                               lambda *args: None,
                              )
-        temperatures = timeseries(mksupplies(channels), channels,
+        channels.append(c)
+        lines.append(l)
+        buffs.append(b)
+        c, l, b = timeseries(mksupplies(this_channels), this_channels,
                               'pcb_temp', 'Temperature [degC]',
                               fig, row[2],
                               (0.0, 300.0), (5.0, 50.0),
                               'linear',
                               lambda *args: None,
                              )
+        channels.append(c)
+        lines.append(l)
+        buffs.append(b)
 
-        timeseriess.append(voltages)
-        timeseriess.append(currents)
-        timeseriess.append(temperatures)
+    curried = partial(update, channels=channels, lines=lines, buffs=buffs)
+    animation = FuncAnimation(fig, curried,
+                              frames=forever,
+                              init_func=init,
+                              repeat=False,
+                              interval=1000,
+                              blit=True)
     plt.show()
 
 if __name__ == '__main__':
