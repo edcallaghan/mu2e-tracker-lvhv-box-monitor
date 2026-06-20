@@ -100,17 +100,15 @@ def forever():
     while True:
         yield None
 
-def timeseries(supplies, channels, cmd, label, xlim, ylim, yscale, logger):
+def timeseries(supplies, channels, cmd, label, fig, ax, xlim, ylim, yscale, logger):
     expire = xlim[1]
     buffs = {
         k: ClockedBuffer(expiration=datetime.timedelta(seconds=expire))
             for k in channels
     }
 
-    fig = plt.figure()
-    plt.xlabel('Time ago [s]')
-    plt.ylabel(label)
-    ax = plt.gca()
+    ax.set_xlabel('Time ago [s]')
+    ax.set_ylabel(label)
     lines = {}
     for channel in channels:
         label = 'Channel %d' % channel
@@ -162,24 +160,51 @@ def timeseries(supplies, channels, cmd, label, xlim, ylim, yscale, logger):
     return animation
 
 def main(args):
-    mksupply = lambda: PowerSupplyServerConnection(args.host, args.port,
-                                                   header=args.header)
-    mksupplies = lambda chs: [mksupply() for ch in chs]
-    channels = args.channels
+    fig = plt.figure()
+    axs = fig.subplots(nrows=len(args.ports), ncols=3)
+    timeseriess = []
+    for i,port in enumerate(args.ports):
+        mksupply = lambda: PowerSupplyServerConnection(args.host, port,
+                                                       header=args.header)
+        mksupplies = lambda chs: [mksupply() for ch in chs]
+        channels = args.channels
 
-    voltages = timeseries(mksupplies(channels), channels,
-                          'get_vhv', 'Voltage [V]',
-#                         (0.0, 300.0), (0.0, 3000.0),
-                          (0.0, 300.0), (-10.0, 10.0),
-                          'linear',
-                          lambda *args: None,
-                         )
+        if 1 < len(args.ports):
+            row = axs[i]
+        else:
+            row = axs
+        voltages = timeseries(mksupplies(channels), channels,
+                              'get_vhv', 'Voltage [V]',
+                              fig, row[0],
+#                             (0.0, 300.0), (0.0, 3000.0),
+                              (0.0, 300.0), (-10.0, +10.0),
+                              'linear',
+                              lambda *args: None,
+                             )
+        currents = timeseries(mksupplies(channels), channels,
+                              'get_ihv', 'Current [uA]',
+                              fig, row[1],
+                              (0.0, 300.0), (0.0, 200.0),
+                              'linear',
+                              lambda *args: None,
+                             )
+        temperatures = timeseries(mksupplies(channels), channels,
+                              'pcb_temp', 'Temperature [degC]',
+                              fig, row[2],
+                              (0.0, 300.0), (5.0, 50.0),
+                              'linear',
+                              lambda *args: None,
+                             )
+
+        timeseriess.append(voltages)
+        timeseriess.append(currents)
+        timeseriess.append(temperatures)
     plt.show()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=str, dest='host', default='localhost')
-    parser.add_argument('--port', type=int, dest='port', default=12000)
+    parser.add_argument('--ports', type=int, dest='ports', nargs='+', required=True)
     parser.add_argument('--header', type=str, dest='header', required=True)
     parser.add_argument('-c', type=int, dest='channels', nargs='+', default=[])
     
