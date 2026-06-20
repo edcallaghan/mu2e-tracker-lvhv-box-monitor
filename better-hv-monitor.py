@@ -156,7 +156,7 @@ def timeseries(supplies, channels, cmd, label, fig, ax, xlim, ylim, yscale, logg
                               init_func=init,
                               repeat=False,
                               interval=1000,
-                              blit=False)
+                              blit=True)
     return animation
 
 def main(args):
