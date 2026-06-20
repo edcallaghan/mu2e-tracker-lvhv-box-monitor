@@ -100,7 +100,7 @@ def forever():
     while True:
         yield None
 
-def timeseries(supplies, channels, cmd, label, fig, ax, xlim, ylim, yscale, logger):
+def timeseries(supplies, channels, cmd, label, fig, ax, xlim, ylim, yscale, label_axes, logger):
     expire = xlim[1]
     buffs = {
         k: ClockedBuffer(expiration=datetime.timedelta(seconds=expire))
@@ -109,8 +109,9 @@ def timeseries(supplies, channels, cmd, label, fig, ax, xlim, ylim, yscale, logg
 
     poll_all_queries(supplies, cmd, channels, buffs, 0.1)
 
-    ax.set_xlabel('Time ago [s]')
-    ax.set_ylabel(label)
+    if label_axes:
+        ax.set_xlabel('Time ago [s]')
+        ax.set_ylabel(label)
     lines = {}
     for channel in channels:
         label = 'Channel %d' % channel
@@ -125,6 +126,7 @@ def timeseries(supplies, channels, cmd, label, fig, ax, xlim, ylim, yscale, logg
     init_tups.append(tup)
 
     return channels, lines, buffs
+
 init_tups = []
 def init():
     global init_tups
@@ -177,33 +179,44 @@ def main(args):
             row = axs[i]
         else:
             row = axs
+
+        label_axes = False
+        if i == len(args.ports) - 1:
+            label_axes = True
+
         c, l, b = timeseries(mksupplies(this_channels), this_channels,
                               'get_vhv', 'Voltage [V]',
                               fig, row[0],
                               (0.0, 300.0), (0.0, 3000.0),
                               'linear',
+                              label_axes,
                               lambda *args: None,
                              )
         channels.append(c)
         lines.append(l)
         buffs.append(b)
+
         c, l, b = timeseries(mksupplies(this_channels), this_channels,
                               'get_ihv', 'Current [uA]',
                               fig, row[1],
                               (0.0, 300.0), (0.0, 200.0),
                               'linear',
+                              label_axes,
                               lambda *args: None,
                              )
         channels.append(c)
         lines.append(l)
         buffs.append(b)
+
         c, l, b = timeseries(mksupplies(this_channels), this_channels,
                               'pcb_temp', 'Temperature [degC]',
                               fig, row[2],
                               (0.0, 300.0), (5.0, 50.0),
                               'linear',
+                              label_axes,
                               lambda *args: None,
                              )
+
         channels.append(c)
         lines.append(l)
         buffs.append(b)
@@ -215,6 +228,7 @@ def main(args):
                               repeat=False,
                               interval=500,
                               blit=True)
+    #plt.tight_layout(pad=0.0, w_pad=-2.0, h_pad=-0.5)
     plt.show()
 
 if __name__ == '__main__':
