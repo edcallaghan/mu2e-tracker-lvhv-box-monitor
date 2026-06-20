@@ -125,7 +125,6 @@ def timeseries(supplies, channels, cmd, label, fig, ax, xlim, ylim, yscale, logg
     init_tups.append(tup)
 
     return channels, lines, buffs
-
 init_tups = []
 def init():
     global init_tups
@@ -181,8 +180,7 @@ def main(args):
         c, l, b = timeseries(mksupplies(this_channels), this_channels,
                               'get_vhv', 'Voltage [V]',
                               fig, row[0],
-#                             (0.0, 300.0), (0.0, 3000.0),
-                              (0.0, 300.0), (-10.0, +10.0),
+                              (0.0, 300.0), (0.0, 3000.0),
                               'linear',
                               lambda *args: None,
                              )
@@ -215,7 +213,7 @@ def main(args):
                               frames=forever,
                               init_func=init,
                               repeat=False,
-                              interval=1000,
+                              interval=500,
                               blit=True)
     plt.show()
 
