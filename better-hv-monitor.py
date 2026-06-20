@@ -199,7 +199,7 @@ def main(args):
         c, l, b = timeseries(mksupplies(this_channels), this_channels,
                               'get_ihv', 'Current [uA]',
                               fig, row[1],
-                              (0.0, 300.0), (0.0, 200.0),
+                              (0.0, 300.0), (0.0, 20.0),
                               'linear',
                               label_axes,
                               lambda *args: None,
