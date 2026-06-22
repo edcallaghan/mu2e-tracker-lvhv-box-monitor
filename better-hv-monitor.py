@@ -22,16 +22,21 @@ def now():
     return rv
 
 class ClockedBuffer(deque):
-    def __init__(self, expiration):
+    def __init__(self, expiration, interval):
         self.expiration = expiration
+        self.interval = interval
         self.lock = threading.Lock()
+
+        target = lambda: self.poll_resolve()
+        thread = threading.Thread(daemon=True, target=target, args=())
+        thread.start()
 
     def Consume(self, item):
         wrapped = (item, now())
         self.lock.acquire()
         self.append(wrapped)
         self.lock.release()
-        self.Resolve()
+        #self.Resolve()
 
     def Resolve(self):
         rn = now()
@@ -45,6 +50,11 @@ class ClockedBuffer(deque):
         rv = [item for item in self]
         self.lock.release()
         return rv
+
+    def poll_resolve(self):
+        while True:
+            sleep(self.interval)
+            self.Resolve()
 
 def query_and_set(supply, cmd, channel, out):
     rv = supply.WriteRead(cmd, channel)
@@ -100,14 +110,15 @@ def forever():
     while True:
         yield None
 
-def timeseries(supplies, channels, cmd, label, fig, ax, xlim, ylim, yscale, label_axes, logger):
+def timeseries(supplies, channels, cmd, label, interval, fig, ax, xlim, ylim, yscale, label_axes, logger):
     expire = xlim[1]
     buffs = {
-        k: ClockedBuffer(expiration=datetime.timedelta(seconds=expire))
+        k: ClockedBuffer(expiration=datetime.timedelta(seconds=expire),
+                         interval=60)
             for k in channels
     }
 
-    poll_all_queries(supplies, cmd, channels, buffs, 0.1)
+    poll_all_queries(supplies, cmd, channels, buffs, interval)
 
     if label_axes:
         ax.set_xlabel('Time ago [s]')
@@ -190,7 +201,7 @@ def main(args):
         row[0].set_title('Port %s' % str(port))
 
         c, l, b = timeseries(mksupplies(this_channels), this_channels,
-                              'get_vhv', 'Voltage [V]',
+                              'get_vhv', 'Voltage [V]', 1.0,
                               fig, row[0],
                               (0.0, 300.0), (0.0, 3000.0),
                               'linear',
@@ -202,7 +213,7 @@ def main(args):
         buffs.append(b)
 
         c, l, b = timeseries(mksupplies(this_channels), this_channels,
-                              'get_ihv', 'Current [uA]',
+                              'get_ihv', 'Current [uA]', 0.1,
                               fig, row[1],
                               (0.0, 300.0), (0.0, 20.0),
                               'linear',
@@ -214,7 +225,7 @@ def main(args):
         buffs.append(b)
 
         c, l, b = timeseries(mksupplies(this_channels), this_channels,
-                              'pcb_temp', 'Temperature [degC]',
+                              'pcb_temp', 'Temperature [degC]', 10.0,
                               fig, row[2],
                               (0.0, 300.0), (5.0, 50.0),
                               'linear',
