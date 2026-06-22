@@ -135,7 +135,7 @@ def init():
         rv += tup
     return rv
 
-def update_subplot(frame, channels, lines, buffs):
+def update_subplot(frame, ax, channels, lines, buffs):
     rn = now()
     latest_values = {}
     for k in lines.keys():
@@ -149,22 +149,24 @@ def update_subplot(frame, channels, lines, buffs):
 
     for k in channels:
         if k in latest_values:
-            lines[k].set_label(f'{latest_values[k]:.3f}\nChannel {k}')
+            lines[k].set_label(f'{k}: {latest_values[k]:.1f}')
         else:
             lines[k].set_label(f'Channel {k}')
 
+    rv = ax.legend(loc='best', ncols=4, fontsize=8)
     return lines.values()
 
-def update(frame, channels, lines, buffs):
+def update(frame, axs, channels, lines, buffs):
     rv = []
-    for subchannels, sublines, subbuffs in zip(channels, lines, buffs):
-        updated = update_subplot(frame, subchannels, sublines, subbuffs)
+    for ax, subchannels, sublines, subbuffs in zip(axs, channels, lines, buffs):
+        updated = update_subplot(frame, ax, subchannels, sublines, subbuffs)
         rv += updated
     return rv
 
 def main(args):
     fig = plt.figure()
-    axs = fig.subplots(nrows=len(args.ports), ncols=3)
+    axss = fig.subplots(nrows=len(args.ports), ncols=3)
+    axs = []
     channels = []
     lines = []
     buffs = []
@@ -176,13 +178,16 @@ def main(args):
         this_channels = args.channels
 
         if 1 < len(args.ports):
-            row = axs[i]
+            row = axss[i]
         else:
-            row = axs
+            row = axss
+        axs += [a for a in row]
 
         label_axes = False
         if i == len(args.ports) - 1:
             label_axes = True
+
+        row[0].set_title('Port %s' % str(port))
 
         c, l, b = timeseries(mksupplies(this_channels), this_channels,
                               'get_vhv', 'Voltage [V]',
@@ -221,14 +226,15 @@ def main(args):
         lines.append(l)
         buffs.append(b)
 
-    curried = partial(update, channels=channels, lines=lines, buffs=buffs)
+    curried = partial(update,
+                      axs=axs, channels=channels, lines=lines, buffs=buffs)
     animation = FuncAnimation(fig, curried,
                               frames=forever,
                               init_func=init,
                               repeat=False,
                               interval=500,
                               blit=True)
-    #plt.tight_layout(pad=0.0, w_pad=-2.0, h_pad=-0.5)
+    plt.tight_layout(pad=0.0, w_pad=-2.0, h_pad=-0.5)
     plt.show()
 
 if __name__ == '__main__':
