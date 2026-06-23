@@ -110,7 +110,7 @@ def forever():
     while True:
         yield None
 
-def timeseries(supplies, channels, cmd, label, interval, fig, ax, xlim, ylim, yscale, label_axes, logger, resolve_interval=60):
+def timeseries(supplies, channels, cmd, label, interval, fig, ax, xlim, ylim, yscale, label_axes, logger, resolve_interval=60, fonts=None):
     expire = xlim[1]
     buffs = {
         k: ClockedBuffer(expiration=datetime.timedelta(seconds=expire),
@@ -121,8 +121,10 @@ def timeseries(supplies, channels, cmd, label, interval, fig, ax, xlim, ylim, ys
     poll_all_queries(supplies, cmd, channels, buffs, interval)
 
     if label_axes:
-        ax.set_xlabel('Time ago [s]')
-        ax.set_ylabel(label)
+        ax.set_xlabel('Time ago [s]', fontsize=fonts.get('axis_label', 10) if fonts else 10)
+        ax.set_ylabel(label, fontsize=fonts.get('axis_label', 10) if fonts else 10)
+    if fonts:
+        ax.tick_params(axis='both', which='major', labelsize=fonts.get('tick', 8))
     lines = {}
     for channel in channels:
         label = 'Channel %d' % channel
@@ -146,7 +148,7 @@ def init():
         rv += tup
     return rv
 
-def update_subplot(frame, ax, channels, lines, buffs):
+def update_subplot(frame, ax, channels, lines, buffs, fonts=None):
     rn = now()
     latest_values = {}
     for k in lines.keys():
@@ -164,13 +166,13 @@ def update_subplot(frame, ax, channels, lines, buffs):
         else:
             lines[k].set_label(f'Channel {k}')
 
-    rv = ax.legend(loc='best', ncols=4, fontsize=8)
+    rv = ax.legend(loc='best', ncols=4, fontsize=fonts.get('legend', 8) if fonts else 8)
     return lines.values()
 
-def update(frame, axs, channels, lines, buffs):
+def update(frame, axs, channels, lines, buffs, fonts=None):
     rv = []
     for ax, subchannels, sublines, subbuffs in zip(axs, channels, lines, buffs):
-        updated = update_subplot(frame, ax, subchannels, sublines, subbuffs)
+        updated = update_subplot(frame, ax, subchannels, sublines, subbuffs, fonts=fonts)
         rv += updated
     return rv
 
@@ -182,6 +184,7 @@ def main(args):
     metrics = config['metrics']
     channels_cfg = config.get('channels', [])
     animation_interval = config.get('animation_interval', 500)
+    fonts_cfg = config.get('fonts', {})
 
     fig = plt.figure()
     axss = fig.subplots(nrows=len(supplies), ncols=len(metrics), squeeze=False)
@@ -215,7 +218,8 @@ def main(args):
                 metric['yscale'],
                 label_axes,
                 lambda *args: None,
-                resolve_interval=config.get('buffer_resolve_interval', 60)
+                resolve_interval=config.get('buffer_resolve_interval', 60),
+                fonts=fonts_cfg
             )
             axs.append(ax)
             channels.append(c)
@@ -223,15 +227,16 @@ def main(args):
             buffs.append(b)
 
     curried = partial(update,
-                      axs=axs, channels=channels, lines=lines, buffs=buffs)
+                      axs=axs, channels=channels, lines=lines, buffs=buffs, fonts=fonts_cfg)
     animation = FuncAnimation(fig, curried,
-                               frames=forever,
-                               init_func=init,
-                               repeat=False,
-                               interval=animation_interval,
-                               blit=True)
+                                frames=forever,
+                                init_func=init,
+                                repeat=False,
+                                interval=animation_interval,
+                                blit=True)
     plt.tight_layout(**config.get('layout', {}))
     plt.show()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
