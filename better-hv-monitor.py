@@ -204,7 +204,7 @@ def main(args):
         for j, metric in enumerate(metrics):
             ax = axss[i, j]
             if j == 0:
-                ax.set_title(supply_cfg.get('label', 'Port %s' % str(port)))
+                ax.set_title(supply_cfg.get('label', 'Port %s' % str(port)), fontsize=fonts_cfg.get('title', 12))
 
             c, l, b = timeseries(
                 [mksupply() for _ in channels_cfg],
