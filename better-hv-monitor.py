@@ -110,7 +110,7 @@ def forever():
     while True:
         yield None
 
-def timeseries(supplies, channels, cmd, label, interval, fig, ax, xlim, ylim, yscale, label_axes, logger, resolve_interval=60, fonts=None):
+def timeseries(supplies, channels, cmd, label, interval, fig, ax, xlim, ylim, yscale, label_axes, logger, resolve_interval=60, fonts=None, per_channel=True):
     expire = xlim[1]
     buffs = {
         k: ClockedBuffer(expiration=datetime.timedelta(seconds=expire),
@@ -127,7 +127,7 @@ def timeseries(supplies, channels, cmd, label, interval, fig, ax, xlim, ylim, ys
         ax.tick_params(axis='both', which='major', labelsize=fonts.get('tick', 8))
     lines = {}
     for channel in channels:
-        label = 'Channel %d' % channel
+        label = 'Channel %d' % channel if per_channel else 'Global'
         lines[channel], *rest = ax.plot([], [], '-', label=label)
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
@@ -206,9 +206,10 @@ def main(args):
             if j == 0:
                 ax.set_title(supply_cfg.get('label', 'Port %s' % str(port)), fontsize=fonts_cfg.get('title', 12))
 
+            this_channels = channels_cfg if metric.get('per_channel', True) else [0]
             c, l, b = timeseries(
-                [mksupply() for _ in channels_cfg],
-                channels_cfg,
+                [mksupply() for _ in this_channels],
+                this_channels,
                 metric['cmd'],
                 metric['label'],
                 metric['polling_interval'],
@@ -219,7 +220,8 @@ def main(args):
                 label_axes,
                 lambda *args: None,
                 resolve_interval=config.get('buffer_resolve_interval', 60),
-                fonts=fonts_cfg
+                fonts=fonts_cfg,
+                per_channel=metric.get('per_channel', True)
             )
             axs.append(ax)
             channels.append(c)
