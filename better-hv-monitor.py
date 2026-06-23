@@ -166,7 +166,7 @@ def update_subplot(frame, ax, channels, lines, buffs, fonts=None):
         else:
             lines[k].set_label(f'Channel {k}')
 
-    rv = ax.legend(loc='best', ncols=4, fontsize=fonts.get('legend', 8) if fonts else 8)
+    rv = ax.legend(loc='upper left', bbox_to_anchor=(0,1), ncols=3, fontsize=fonts.get('legend', 8) if fonts else 8)
     return lines.values()
 
 def update(frame, axs, channels, lines, buffs, fonts=None):
