@@ -110,11 +110,11 @@ def forever():
     while True:
         yield None
 
-def timeseries(supplies, channels, cmd, label, interval, fig, ax, xlim, ylim, yscale, label_axes, logger):
+def timeseries(supplies, channels, cmd, label, interval, fig, ax, xlim, ylim, yscale, label_axes, logger, resolve_interval=60):
     expire = xlim[1]
     buffs = {
         k: ClockedBuffer(expiration=datetime.timedelta(seconds=expire),
-                         interval=60)
+                         interval=resolve_interval)
             for k in channels
     }
 
@@ -175,85 +175,69 @@ def update(frame, axs, channels, lines, buffs):
     return rv
 
 def main(args):
+    with open(args.config, 'r') as f:
+        config = json.load(f)
+
+    supplies = config['supplies']
+    metrics = config['metrics']
+    channels_cfg = config.get('channels', [])
+    animation_interval = config.get('animation_interval', 500)
+
     fig = plt.figure()
-    axss = fig.subplots(nrows=len(args.ports), ncols=3)
+    axss = fig.subplots(nrows=len(supplies), ncols=len(metrics), squeeze=False)
     axs = []
     channels = []
     lines = []
     buffs = []
 
-    for i,port in enumerate(args.ports):
-        mksupply = lambda: PowerSupplyServerConnection(args.host, port,
-                                                       header=args.header)
-        mksupplies = lambda chs: [mksupply() for ch in chs]
-        this_channels = args.channels
+    for i, supply_cfg in enumerate(supplies):
+        host = supply_cfg['host']
+        port = supply_cfg['port']
 
-        if 1 < len(args.ports):
-            row = axss[i]
-        else:
-            row = axss
-        axs += [a for a in row]
+        mksupply = lambda: PowerSupplyServerConnection(host, port, header=args.header)
 
-        label_axes = False
-        if i == len(args.ports) - 1:
-            label_axes = True
+        label_axes = (i == len(supplies) - 1)
 
-        row[0].set_title('Port %s' % str(port))
+        for j, metric in enumerate(metrics):
+            ax = axss[i, j]
+            if j == 0:
+                ax.set_title(supply_cfg.get('label', 'Port %s' % str(port)))
 
-        c, l, b = timeseries(mksupplies(this_channels), this_channels,
-                              'get_vhv', 'Voltage [V]', 1.0,
-                              fig, row[0],
-                              (0.0, 300.0), (0.0, 3000.0),
-                              'linear',
-                              label_axes,
-                              lambda *args: None,
-                             )
-        channels.append(c)
-        lines.append(l)
-        buffs.append(b)
-
-        c, l, b = timeseries(mksupplies(this_channels), this_channels,
-                              'get_ihv', 'Current [uA]', 0.1,
-                              fig, row[1],
-                              (0.0, 300.0), (0.0, 20.0),
-                              'linear',
-                              label_axes,
-                              lambda *args: None,
-                             )
-        channels.append(c)
-        lines.append(l)
-        buffs.append(b)
-
-        c, l, b = timeseries(mksupplies(this_channels), this_channels,
-                              'pcb_temp', 'Temperature [degC]', 10.0,
-                              fig, row[2],
-                              (0.0, 300.0), (5.0, 50.0),
-                              'linear',
-                              label_axes,
-                              lambda *args: None,
-                             )
-
-        channels.append(c)
-        lines.append(l)
-        buffs.append(b)
+            c, l, b = timeseries(
+                [mksupply() for _ in channels_cfg],
+                channels_cfg,
+                metric['cmd'],
+                metric['label'],
+                metric['polling_interval'],
+                fig, ax,
+                tuple(metric['xlim']),
+                tuple(metric['ylim']),
+                metric['yscale'],
+                label_axes,
+                lambda *args: None,
+                resolve_interval=config.get('buffer_resolve_interval', 60)
+            )
+            axs.append(ax)
+            channels.append(c)
+            lines.append(l)
+            buffs.append(b)
 
     curried = partial(update,
                       axs=axs, channels=channels, lines=lines, buffs=buffs)
     animation = FuncAnimation(fig, curried,
-                              frames=forever,
-                              init_func=init,
-                              repeat=False,
-                              interval=500,
-                              blit=True)
-    plt.tight_layout(pad=0.0, w_pad=-2.0, h_pad=-0.5)
+                               frames=forever,
+                               init_func=init,
+                               repeat=False,
+                               interval=animation_interval,
+                               blit=True)
+    plt.tight_layout(**config.get('layout', {}))
     plt.show()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--host', type=str, dest='host', default='localhost')
-    parser.add_argument('--ports', type=int, dest='ports', nargs='+', required=True)
+    parser.add_argument('--config', type=str, dest='config', default='config.json', help='Path to config JSON file')
     parser.add_argument('--header', type=str, dest='header', required=True)
-    parser.add_argument('-c', type=int, dest='channels', nargs='+', default=[])
-    
+
     args = parser.parse_args()
     main(args)
+
