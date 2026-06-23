@@ -234,7 +234,7 @@ def main(args):
                                 repeat=False,
                                 interval=animation_interval,
                                 blit=True)
-    plt.tight_layout(**config.get('layout', {}))
+    plt.subplots_adjust(**config.get('margins', {}))
     plt.show()
 
 
