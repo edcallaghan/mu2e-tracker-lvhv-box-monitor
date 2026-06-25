@@ -148,33 +148,35 @@ def init():
         rv += tup
     return rv
 
-def update_subplot(frame, ax, channels, lines, buffs, legend, fonts=None):
-    rn = now()
+def update_subplot(frame, rn, ax, channels, lines, buffs, legend, fonts=None, legend_update_interval=10):
     latest_values = {}
     for k in lines.keys():
         buff = buffs[k]
         snapshot = buff.Snapshot()
-        xx = [(rn - pair[1]).total_seconds() for pair in snapshot]
-        yy = [pair[0] for pair in snapshot]
+        if not snapshot:
+            xx, yy = [], []
+        else:
+            yy, times = zip(*snapshot)
+            xx = [(rn - t).total_seconds() for t in times]
         lines[k].set_data(xx, yy)
         if 0 < len(yy):
             latest_values[k] = yy[-1]
 
-    texts = legend.get_texts()
-    for i,k in enumerate(channels):
-        if k in latest_values:
-            lines[k].set_label(f'{k}: {latest_values[k]:.1f}')
-        else:
-            lines[k].set_label(f'Channel {k}')
-        texts[i].set_text(lines[k].get_label())
+    rv = list(lines.values())
+    if frame % legend_update_interval == 0:
+        texts = legend.get_texts()
+        for i, k in enumerate(channels):
+            label = f'{k}: {latest_values[k]:.1f}' if k in latest_values else f'Channel {k}'
+            texts[i].set_text(label)
+        rv.append(legend)
 
-    rv = list(lines.values()) + [legend]
     return rv
 
-def update(frame, axs, channels, lines, buffs, legends, fonts=None):
+def update(frame, axs, channels, lines, buffs, legends, fonts=None, legend_update_interval=10):
+    rn = now()
     rv = []
     for ax, subchannels, sublines, subbuffs, legend in zip(axs, channels, lines, buffs, legends):
-        updated = update_subplot(frame, ax, subchannels, sublines, subbuffs, legend, fonts=fonts)
+        updated = update_subplot(frame, rn, ax, subchannels, sublines, subbuffs, legend, fonts=fonts, legend_update_interval=legend_update_interval)
         rv += updated
     return rv
 
@@ -236,13 +238,14 @@ def main(args):
             legends.append(legend)
 
     curried = partial(update,
-                      axs=axs, channels=channels, lines=lines, buffs=buffs, legends=legends, fonts=fonts_cfg)
+                       axs=axs, channels=channels, lines=lines, buffs=buffs, legends=legends, fonts=fonts_cfg,
+                       legend_update_interval=config.get('legend_update_interval', 10))
     animation = FuncAnimation(fig, curried,
-                                frames=forever,
-                                init_func=init,
-                                repeat=False,
-                                interval=animation_interval,
-                                blit=True)
+                                 frames=forever,
+                                 init_func=init,
+                                 repeat=False,
+                                 interval=animation_interval,
+                                 blit=True)
     plt.subplots_adjust(**config.get('margins', {}))
     plt.show()
 
