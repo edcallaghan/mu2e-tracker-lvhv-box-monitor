@@ -148,7 +148,7 @@ def init():
         rv += tup
     return rv
 
-def update_subplot(frame, ax, channels, lines, buffs, fonts=None):
+def update_subplot(frame, ax, channels, lines, buffs, legend, fonts=None):
     rn = now()
     latest_values = {}
     for k in lines.keys():
@@ -160,19 +160,21 @@ def update_subplot(frame, ax, channels, lines, buffs, fonts=None):
         if 0 < len(yy):
             latest_values[k] = yy[-1]
 
-    for k in channels:
+    texts = legend.get_texts()
+    for i,k in enumerate(channels):
         if k in latest_values:
             lines[k].set_label(f'{k}: {latest_values[k]:.1f}')
         else:
             lines[k].set_label(f'Channel {k}')
+        texts[i].set_text(lines[k].get_label())
 
-    rv = ax.legend(loc='upper left', bbox_to_anchor=(0,1), ncols=3, fontsize=fonts.get('legend', 8) if fonts else 8)
-    return lines.values()
+    rv = list(lines.values()) + [legend]
+    return rv
 
-def update(frame, axs, channels, lines, buffs, fonts=None):
+def update(frame, axs, channels, lines, buffs, legends, fonts=None):
     rv = []
-    for ax, subchannels, sublines, subbuffs in zip(axs, channels, lines, buffs):
-        updated = update_subplot(frame, ax, subchannels, sublines, subbuffs, fonts=fonts)
+    for ax, subchannels, sublines, subbuffs, legend in zip(axs, channels, lines, buffs, legends):
+        updated = update_subplot(frame, ax, subchannels, sublines, subbuffs, legend, fonts=fonts)
         rv += updated
     return rv
 
@@ -192,6 +194,7 @@ def main(args):
     channels = []
     lines = []
     buffs = []
+    legends = []
 
     for i, supply_cfg in enumerate(supplies):
         host = supply_cfg['host']
@@ -228,8 +231,12 @@ def main(args):
             lines.append(l)
             buffs.append(b)
 
+            fonts = config['fonts']
+            legend = ax.legend(loc='upper left', bbox_to_anchor=(0,1), ncols=3, fontsize=fonts.get('legend', 8) if fonts else 8)
+            legends.append(legend)
+
     curried = partial(update,
-                      axs=axs, channels=channels, lines=lines, buffs=buffs, fonts=fonts_cfg)
+                      axs=axs, channels=channels, lines=lines, buffs=buffs, legends=legends, fonts=fonts_cfg)
     animation = FuncAnimation(fig, curried,
                                 frames=forever,
                                 init_func=init,
@@ -238,7 +245,6 @@ def main(args):
                                 blit=True)
     plt.subplots_adjust(**config.get('margins', {}))
     plt.show()
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
