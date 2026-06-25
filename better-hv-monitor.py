@@ -136,11 +136,17 @@ def timeseries(supplies, channels, cmd, label, interval, fig, ax, xlim, ylim, ys
     ax.set_yscale(yscale)
     ax.invert_xaxis()
 
+    # Create a text artist for latest values
+    text_font_size = fonts.get('legend', 8) if fonts else 8
+    value_text = ax.text(0.02, 0.98, '', transform=ax.transAxes,
+                         verticalalignment='top', fontsize=text_font_size,
+                         family='monospace')
+
     global init_tups
-    tup = lines.values()
+    tup = list(lines.values()) + [value_text]
     init_tups.append(tup)
 
-    return channels, lines, buffs
+    return channels, lines, buffs, value_text
 
 init_tups = []
 def init():
@@ -150,7 +156,7 @@ def init():
         rv += tup
     return rv
 
-def update_subplot(frame, rn, ax, channels, lines, buffs, legend, fonts=None, legend_update_interval=10):
+def update_subplot(frame, rn, ax, channels, lines, buffs, value_text, fonts=None):
     latest_values = {}
     for k in lines.keys():
         buff = buffs[k]
@@ -164,21 +170,18 @@ def update_subplot(frame, rn, ax, channels, lines, buffs, legend, fonts=None, le
         if 0 < len(yy):
             latest_values[k] = yy[-1]
 
-    rv = list(lines.values())
-    if frame % legend_update_interval == 0:
-        texts = legend.get_texts()
-        for i, k in enumerate(channels):
-            label = f'{k}: {latest_values[k]:.1f}' if k in latest_values else f'Channel {k}'
-            texts[i].set_text(label)
-        rv.append(legend)
+    # Update the values text artist
+    val_strings = [f'{k}: {v:.1f}' for k, v in latest_values.items()]
+    value_text.set_text('\n'.join(val_strings))
 
+    rv = list(lines.values()) + [value_text]
     return rv
 
-def update(frame, axs, channels, lines, buffs, legends, fonts=None, legend_update_interval=10):
+def update(frame, axs, channels, lines, buffs, value_texts, fonts=None):
     rn = now()
     rv = []
-    for ax, subchannels, sublines, subbuffs, legend in zip(axs, channels, lines, buffs, legends):
-        updated = update_subplot(frame, rn, ax, subchannels, sublines, subbuffs, legend, fonts=fonts, legend_update_interval=legend_update_interval)
+    for ax, subchannels, sublines, subbuffs, vtext in zip(axs, channels, lines, buffs, value_texts):
+        updated = update_subplot(frame, rn, ax, subchannels, sublines, subbuffs, vtext, fonts=fonts)
         rv += updated
     return rv
 
@@ -198,7 +201,7 @@ def main(args):
     channels = []
     lines = []
     buffs = []
-    legends = []
+    value_texts = []
 
     for i, supply_cfg in enumerate(supplies):
         host = supply_cfg['host']
@@ -214,7 +217,7 @@ def main(args):
                 ax.set_title(supply_cfg.get('label', 'Port %s' % str(port)), fontsize=fonts_cfg.get('title', 12))
 
             this_channels = channels_cfg if metric.get('per_channel', True) else [0]
-            c, l, b = timeseries(
+            c, l, b, vt = timeseries(
                 [mksupply() for _ in this_channels],
                 this_channels,
                 metric['cmd'],
@@ -234,14 +237,10 @@ def main(args):
             channels.append(c)
             lines.append(l)
             buffs.append(b)
-
-            fonts = config['fonts']
-            legend = ax.legend(loc='upper left', bbox_to_anchor=(0,1), ncols=3, fontsize=fonts.get('legend', 8) if fonts else 8)
-            legends.append(legend)
+            value_texts.append(vt)
 
     curried = partial(update,
-                       axs=axs, channels=channels, lines=lines, buffs=buffs, legends=legends, fonts=fonts_cfg,
-                       legend_update_interval=config.get('legend_update_interval', 10))
+                       axs=axs, channels=channels, lines=lines, buffs=buffs, value_texts=value_texts, fonts=fonts_cfg)
     animation = FuncAnimation(fig, curried,
                                  frames=forever,
                                  init_func=init,
