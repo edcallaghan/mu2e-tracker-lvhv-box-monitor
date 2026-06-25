@@ -107,8 +107,10 @@ def poll_all_queries(supplies, cmd, channels, buffs, interval):
         thread.start()
 
 def forever():
+    i = 0
     while True:
-        yield None
+        yield i
+        i += 1
 
 def timeseries(supplies, channels, cmd, label, interval, fig, ax, xlim, ylim, yscale, label_axes, logger, resolve_interval=60, fonts=None, per_channel=True):
     expire = xlim[1]
