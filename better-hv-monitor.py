@@ -138,7 +138,7 @@ def timeseries(supplies, channels, cmd, label, interval, fig, ax, xlim, ylim, ys
 
     # Create a text artist for latest values
     text_font_size = fonts.get('legend', 8) if fonts else 8
-    value_text = ax.text(0.02, 0.98, '', transform=ax.transAxes,
+    value_text = ax.text(0.02, 0.95, '', transform=ax.transAxes,
                          verticalalignment='top', fontsize=text_font_size,
                          family='monospace')
 
